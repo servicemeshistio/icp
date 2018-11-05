@@ -1,0 +1,98 @@
+#!/bin/bash
+#
+#
+# Author : Service Mesh Istio Book Authors
+#
+# Purpose: Configure direct LVM for docker
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+if vgdisplay | grep -q 'docker'; then
+   echo volume group docker already created. Exiting ... 1>&2
+   echo vgremove -f dockeri --> to remove
+   exit 1
+fi
+
+DEVS="$1"
+if [ -z "$DEVS" ]; then
+  echo >&2 "Usage: $0 block_device_name"
+  exit 1
+fi
+
+echo ========================================================
+echo Configure direct LVM mode for production
+echo ========================================================
+echo Step-01: Stop docker service
+systemctl stop docker
+rm -fr /var/lib/docker
+sleep 3
+
+echo ========================================================
+echo Step-02: rm /var/lib/docker
+rm -fr /var/lib/docker
+echo ========================================================
+echo Step-03: Create a physical volume using $DEVS
+pvcreate $DEVS
+
+echo ========================================================
+echo Step-04: Create docker volume group
+vgcreate docker $DEVS
+echo ========================================================
+echo Step-05: Create a thin pool named thinpool
+lvcreate --wipesignatures y --yes --name thinpool --extents 95%VG docker
+lvcreate --wipesignatures y --yes --name thinpoolmeta --extents 1%VG docker
+
+echo ========================================================
+echo Step-06: Convert the pool to a thin pool
+lvconvert -y --zero n -c 64K --thinpool docker/thinpool --poolmetadata docker/thinpoolmeta
+
+echo ========================================================
+echo Step-07: Configure autoextension of thin pools via an lvm profile
+cat << EOF > /etc/lvm/profile/docker-thinpool.profile
+activation {
+   thin_pool_autoextend_threshold=80
+   thin_pool_autoextend_percent=20
+}
+EOF
+
+echo ========================================================
+echo Step-08: Apply new lvm profile
+lvchange --metadataprofile docker-thinpool docker/thinpool
+
+echo ========================================================
+echo Step-09: Verified the lv is monitored
+lvs -o+seg_monitor
+
+if ! rpm -qa | grep -q '^xfsprogs'; then
+  yum install -y xfsprogs
+fi
+
+echo ========================================================
+echo Step-10: Configure the Docker daemon with specific devicemapper options
+cat << EOF > /etc/docker/daemon.json
+{
+   "insecure-registries" : ["registry.ibm.local:5000"],
+   "storage-opts": [
+     "dm.thinpooldev=/dev/mapper/docker-thinpool",
+     "dm.fs=xfs",
+     "dm.basesize=12G",
+     "dm.min_free_space=5%",
+     "dm.use_deferred_deletion=true",
+     "dm.use_deferred_removal=true"
+   ]
+}
+EOF
+
+echo ========================================================
+echo Step-11: Reload systemd to scan for changes
+systemctl daemon-reload
+sleep 5
+
+echo ========================================================
+echo Step-12: systemctl start docker
+systemctl start docker
+echo ========================================================
+docker info
