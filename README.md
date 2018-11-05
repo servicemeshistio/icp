@@ -8,13 +8,13 @@ However - it is possible to work with 16GB but it will be very slow.
 
 Suggestions:
 
-1. Use VMware Workstation - Even though it is a licensed software, it is worth buying it. I am not a fan of VirtualBox. The VMware is a rock solid software.
+* Use VMware Workstation - Even though it is a licensed software, it is worth buying it. I am not a fan of VirtualBox. The VMware is a rock solid software.
 
-2. You can use `free` VMware player if you can get your hands on an already available VM that you can use. You need VMware Workstation should you need to build a VM from installation iso file.
+* You can use `free` VMware player if you can get your hands on an already available VM that you can use. You need VMware Workstation should you need to build a VM from installation iso file.
 
-3. My personal choice is to use `CentOS` but you can use any Linux distribution of your choice.
+* My personal choice is to use `CentOS` but you can use any Linux distribution of your choice.
 
-4. After you have 3 VMs up and running, you need to do the following:
+* After you have 3 VMs up and running, you need to do the following:
 
   * Configure passwordless SSH access between all VMs. You can refer to this [link](https://github.com/vikramkhatri/sshsetup) for setting up SSH if you need automation.
   * Configure [direct LVM](Scripts/directLVM) access for a disk to be used by Docker
