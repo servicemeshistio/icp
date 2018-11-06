@@ -71,3 +71,5 @@ nameserver 192.168.142.101
 domain servicemesh.local
 search servicemesh.local
 ```
+
+The nameserver `192.168.142.101` is the first VM in our case - which is running the `dnsmasq` name server. The name resolution to local hosts, Kubernetes cluster service names and external names will be resolved by our `dnsmasq` server.

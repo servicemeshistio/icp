@@ -18,7 +18,7 @@ Suggestions:
 
   * Configure passwordless SSH access between all VMs. You can refer to this [link](https://github.com/vikramkhatri/sshsetup) for setting up SSH if you need automation.
   * Configure [direct LVM](Scripts/directLVM) access for a disk to be used by Docker
-  * Configure `dnsmasq` in first VM for DNS routing if host names are not defined in the upstream DNS server. Optional - but useful
+  * Configure [dnsmasq](/Scripts/dnsmasq.md) in first VM for DNS routing if host names are not defined in the upstream DNS server. Optional - but useful
   * Configure `ntpd` on ist VM so that all VMs time is in sync. Since, we are going to use CockroachDB 3 replicas, the time must be within 500ms for it work properly.    
 
 ## Download ICP Installer
