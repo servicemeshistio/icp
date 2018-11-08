@@ -568,7 +568,8 @@ Check mount points
 # df -h | grep glusterfs
 ```
 Output:
-```/dev/mapper/ServiceMesh-cockroachdb  4.0G   33M  4.0G   1% /mnt/glusterfs/cockroachdb
+```
+/dev/mapper/ServiceMesh-cockroachdb  4.0G   33M  4.0G   1% /mnt/glusterfs/cockroachdb
 /dev/mapper/ServiceMesh-web          4.0G   33M  4.0G   1% /mnt/glusterfs/web
 ```
 
@@ -587,7 +588,8 @@ Check mount points
 # df -h | grep glusterfs
 ```
 Output:
-```/dev/mapper/ServiceMesh-cockroachdb  4.0G   33M  4.0G   1% /mnt/glusterfs/cockroachdb
+```
+/dev/mapper/ServiceMesh-cockroachdb  4.0G   33M  4.0G   1% /mnt/glusterfs/cockroachdb
 /dev/mapper/ServiceMesh-web          4.0G   33M  4.0G   1% /mnt/glusterfs/web
 ```
 
@@ -614,7 +616,7 @@ cd /root/bin/scripts
 ./04-glusterstartstop start
 ```
 
-Check status of Gluster volume status. As a sanity check, all tasks `Online` status should show `Y`
+Check Gluster volume status. As a sanity check, all tasks `Online` status should show `Y`
 
 ```
 # gluster volume status cockroachdb
@@ -652,4 +654,27 @@ Self-heal Daemon on 192.168.142.103         N/A       N/A        Y       15780
 Task Status of Volume web
 ------------------------------------------------------------------------------
 There are no active volume tasks
+```
+
+## Synchronize Clocks
+
+Before we install cockroachdb, we need to make sure that the clocks are in sync.
+
+This is necessary to keep clocks in sync within 500 ms so that cockroachdb can function well in a cluster environment.
+
+Run script [/root/bin/scripts/syncclocks](/Scripts/syncclocks) which does the following:
+
+* Create `/bin/synclock` - which checks the time difference between VMs.
+* Create a cronjob to run this sript every 15 minutes - though not necessary as NTP should do its job. Sync time in VMs is challenging due to time sync at Windows level, from VM to the guest and then using NTP between all nodes using ntpd.
+* Create `/bin/hardsync` which will do a force time sync between VMs.
+
+After running `syncclocks`, run `synclock`
+
+```
+# synclock
+=================================================================================
+Checking time diff between 192.168.142.101 with the node01 .... 0.000 milliseconds
+Checking time diff between 192.168.142.102 with the node01 .... -2.141 milliseconds
+Checking time diff between 192.168.142.103 with the node01 .... -1.983 milliseconds
+=================================================================================
 ```

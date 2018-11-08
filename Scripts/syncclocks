@@ -1,0 +1,146 @@
+cat <<'EOT' > /bin/synclock
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Book
+#
+# Purpose: Sync clock and check the time difference
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+DIFF=${1:-400}
+SSH="/bin/ssh -q -o PreferredAuthentications=publickey -o StrictHostKeyChecking=no"
+PS_LEADER=node01
+
+function checkntp
+{
+  host=$1
+  $SSH $host "vmware-toolbox-cmd timesync disable" 2>&1 > /dev/null
+  try=0
+  until [ $try -gt 5 ] ; do
+    UP=$($SSH $host systemctl is-active --quiet ntpd && echo up || echo down)
+    if [ "$UP" == "up" ] ; then
+      break;
+    else
+      $SSH $host "systemctl is-active --quiet ntpd || systemctl start ntpd"
+      sleep 1
+    fi
+    try=$[$try+1]
+  done
+}
+
+function checktimediff
+{
+  host=$1
+  try=0
+  echo -n "Checking time diff between $host with the node01 .... " 
+  until [ $try -gt 5 ] ; do
+     TIMEDIFF=$(ssh $host "ntpq -p | grep LOCAL" | awk '{print $9}')
+     if [ "$TIMEDIFF" == "" ] ; then
+        echo Unable to get the time diff from $host
+        break
+     else
+        N_TIMEDIFF=$(echo $TIMEDIFF | awk '{printf("%.0f\n", $1)}')
+        N_TIMEDIFF=${N_TIMEDIFF#-}
+        if [ $N_TIMEDIFF -gt $DIFF ] ; then
+           echo Try=$try Resync time since time diff is $TIMEDIFF
+           ssh $host "systemctl stop ntpd;ntpdate -b node01;systemctl start ntpd"
+        else
+           echo $TIMEDIFF milliseconds
+           break
+        fi
+     fi
+     try=$[$try+1]
+  done
+}
+
+
+echo =================================================================================
+checkntp node01
+hosts=$(cat /var/ps/hosts.icp)
+for host in $hosts
+do
+   checkntp $host
+   checktimediff $host
+done
+echo =================================================================================
+EOT
+chmod +x /bin/synclock
+
+cat <<'EOT' | crontab
+MAILTO=""
+*/15 * * * * /bin/synclock 2>&1 | /usr/bin/logger -t synclock
+EOT
+
+cat <<'EOT' > /bin/vmtimesync
+onoff=${1:-enable}
+if [ "$onoff" != "enable" ] ; then
+   onoff=disable
+fi
+
+runall vmware-toolbox-cmd timesync $onoff
+EOT
+chmod +x /bin/vmtimesync
+
+cat <<'EOT' > /bin/hardsync
+#!/bin/bash
+
+set +x
+
+islive() {
+  target=$1
+  count=$(ping -c 1 $target | grep -E "icmp.*time" | wc -l)
+  if [ $count -eq 0 ] ; then
+     echo 1;
+  else
+     echo 0;
+  fi
+}
+
+hosts=$(cat /var/ps/hosts.icp)
+
+while true
+do
+   live=1
+   for server in $hosts
+   do
+     live=$(islive $server)
+     if [ $live -eq 1 ] ; then
+        break;
+     fi
+   done
+   if [ $live -eq 0 ] ; then
+      logger ========================================
+      logger All are alive now. 
+      logger ========================================
+      break
+   else
+      logger ========================================
+      logger Waiting for all to come alive
+      sleep 10
+   fi
+done
+
+for server in $hosts
+do
+  ssh $server systemctl stop ntpd
+  ssh $server systemctl start ntpd
+  ssh $server vmware-toolbox-cmd timesync enable
+done
+
+for i in 1 2 3 4 5
+do
+  echo Iteration $i ....
+  /bin/synclock 10
+done
+
+for server in $hosts
+do
+  ssh $server vmware-toolbox-cmd timesync disable
+done
+EOT
+chmod +x /bin/hardsync
