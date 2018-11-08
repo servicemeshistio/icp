@@ -4,21 +4,22 @@ The Community Edition of IBM Cloud Private is free and is a great resource to le
 
 Let's walk through the steps to install a 3 node IBM Cloud Private Cluster
 
-### Assumptions
+## Assumptions
 
 * You know how to install a Linux distribution in your VM environment
 * You know how to install `docker`
 * You have a docker hub account to download IBM Cloud Private images
 
-### What you need?
+## Prerequisites
 
 * A decent Windows 7 / 10 laptop with minimum 32 GB RAM and Intel Core i7 processor and a preferable minimum 512 GB SSD
-* VMWare Workstation 14.1.2 - Even though it is a licensed software, it is worth buying it. I am not a fan of VirtualBox. The VMware is a rock solid software.
-* You can use `free` VMware player if you can get your hands on an already available VM that you can use. You need VMware Workstation should you need to build a VM from installation iso file.
+* VMWare Workstation 14.1.2/15 - Even though it is a licensed software, it is worth buying it. I am not a fan of VirtualBox. The VMware is a rock solid software. I have run 8 VMs simultaneously on my Windows 7 laptop with double CPU provisioning. I rarely see crash of VMs now.
+* You can use `free` VMware player but unfortunately you can run only one VM per host.
+* You could use `virtualbox` but I do not have good feelings about it after my use of it.
 * Build your 3 VMs. My personal choice is to use `CentOS` but you can use any Linux distribution of your choice.
-* Use `vmnet8` subnet address `192.168.142.0` with NAT.
-* Attach 100 GB thin provisioned disk (vmdk) on each node for holding Docker images and containers
-* Attach 20 GB thin provisioned disk (vmdk) on each node for persistent storage used by the IBM Cloud Private
+* In VMware Workstation, `Edit` ⇨ `Virtual Network Editor` to set the `vmnet8` to subnet address `192.168.142.0` in NAT mode.
+* Attach 100 GB thin provisioned disk (vmdk) on each node for storing Docker images and containers
+* Attach 20 GB thin provisioned disk (vmdk) on each node for persistent storages configuration.
 
 Build VMs and when you have all 3 VMs up and running, prepare your environment.
 
@@ -40,9 +41,13 @@ If using Intel Core i7 processor in a laptop, it gives 4 cores and 2 threads per
 
 ## Prepare your VMs
 
+You can either build your own VMs using your choice of Linux distribution and your choice of virtualization platform.
+
+If you are learning and have no prior experience, you can then download the base VMs that we built for this purpose.
+
 ### Download VMs
 
-If you like to download the three base VM images to install IBM Cloud Private 3 node community edition cluster, you can download 7z of images from [here](#). If you download VMs, you can skip this `Prepare your VMs` section as the following steps are already taken care in the VMs.
+If you like to download three base VM images to install IBM Cloud Private community edition cluster, you can download 7z of images from [here](#). If you download VMs, you can skip this `Prepare your VMs` section as theese following steps are already taken care in the VMs.
 
 Continue with these steps, should you choose to build your own VMs.   
 
@@ -322,7 +327,7 @@ cp kubectl /bin
 
 ### Install cloudctl and helm client
 
-The cloudctl tool is superset of cloud foundry tool to run command line tools to authenticate with IBM Cloud Private so that helm install can be done using mTLS. Their are many other capabilities of `cloudctl`.
+The `cloudctl` tool is superset of cloud foundry tool to run command line tools to authenticate with IBM Cloud Private so that helm install can be done using `mTLS`. Their are many other capabilities of `cloudctl`.
 
 ```
 MASTERNODE=192.168.142.101
@@ -428,3 +433,223 @@ kubectl config use-context servicemesh
 Now, we can run `kubectl` command which will not expire as we are using certificate based authentication, which was the case `cloudctl login` but that comes with a bearer token.
 
 This method is good if we work directly from the server.
+
+### Launch IBM Cloud Private Web UI
+
+Open URL https://192.168.142.101:8443 from a browser. My personal choice is Google Chrome.
+
+Use user id `admin` and password `admin`.
+
+This will show the web UI of the IBM Cloud Private. Go through this to familiarize yourself.
+
+## Configure Gluster
+
+`GlusterFS` (Gluster File System) is an open source distributed scale out file system to build large storage clusters.
+
+`Heketi` - It is a Gluster Volume Manager that provides a REST API to create / manage Gluster volumes. Heketi makes it easy for Kubernetes to provision volumes. You can use Gluster/Heketi with IBM Cloud Private. It can be installed at the time of initial installation or after the install. With the use of Heketi, it is possible to use dynamic volume provisioning.
+
+Even though, IBM Cloud Private has support for GlusterFS and Heketi, we will be using Gluster manually to provision LVs for persistent storages. From learning standpoint, this will be a good exercise.
+
+### Install glusterFS server
+
+> The Gluster 4.1 is already installed on all VMs if you downloaded them.
+
+Repeat this on all VMs.
+
+These instructions are for building your own Gluster on all VMs.
+
+```
+yum install centos-release-gluster
+```
+
+The above will install an epel repo in `/etc/yum.repos.d`.
+
+```
+yum install glusterfs-server
+```
+
+After install, run `gluster --version` to check the version.
+
+```
+# gluster --version
+glusterfs 4.1.4
+Repository revision: git://git.gluster.org/glusterfs.git
+Copyright (c) 2006-2016 Red Hat, Inc. <https://www.gluster.org/>
+```
+
+### Build GlusterFS Cluster
+
+You need minimum 2 nodes to build a GlusterFS cluster (or domain). It is a likelihood that you may run into split-brain issues with 2 nodes. It is recommended to use minimum 3 nodes.
+
+We will use all 3 nodes to build a GlusterFS domain.
+
+Ideally - you should use separate VMs to host Gluster hosts and do not mix them with workker nodes. In our case, we will use same workker node to also host gluster servers.
+
+
+#### Create GlusterFS domain
+
+The script [/root/bin/scripts/01-glusterdomain](/Gluster/01-glusterdomain) creates a 3 node GlusterFS domain.
+
+Run script to create 3 node gluster peer domain (From 1st node only)
+
+```
+cd /root/bin/scripts
+./01-glusterdomain
+```
+
+Check the `gluster peer status`
+
+```
+gluster peer status
+ssh node02 gluster peer status
+ssh node03 gluster peer status
+```
+
+The sample output of the `gluster peer status` is:
+```
+# gluster peer status
+Number of Peers: 2
+
+Hostname: 192.168.142.102
+Uuid: d0852167-9fd8-4f84-afb0-65ab60e3b6c8
+State: Peer in Cluster (Connected)
+
+Hostname: 192.168.142.103
+Uuid: 9c3b4057-bb44-4e2c-a9db-61d807da8e6a
+State: Peer in Cluster (Connected)
+```
+
+#### Create Logical Volume
+
+The script [/root/bin/scripts/02-glusterlvm](/Gluster/02-glusterlvm) creates logical volumes.
+
+We added a 40GB thin provisioned disk in each VM. We will use this disk to create LVs on each VMs.
+
+
+Check the disk name
+```
+ssh node01 lsblk | grep 40G
+ssh node02 lsblk | grep 40G
+ssh node03 lsblk | grep 40G
+```
+
+In our VM setup, this disk is `/dev/sdb`. It is better to always double check.
+
+On node01, run
+```
+cd /root/bin/scripts
+./02-glusterlvm /dev/sdb brick1
+```
+
+On node01, we will use /dev/sdb to create 2 LVMs, create file system, create entries in `/etc/fstab` and mount them.
+
+We create 2 mount points:
+
+```
+# df -h | grep glusterfs
+```
+Output:
+```
+/dev/mapper/ServiceMesh-cockroachdb  4.0G   33M  4.0G   1% /mnt/glusterfs/cockroachdb
+/dev/mapper/ServiceMesh-web          4.0G   33M  4.0G   1% /mnt/glusterfs/web
+```
+
+On node02, run
+
+```
+ssh node02
+cd /root/bin/scripts
+./02-glusterlvm /dev/sdb brick2
+```
+
+Check mount points
+
+```
+# df -h | grep glusterfs
+```
+Output:
+```/dev/mapper/ServiceMesh-cockroachdb  4.0G   33M  4.0G   1% /mnt/glusterfs/cockroachdb
+/dev/mapper/ServiceMesh-web          4.0G   33M  4.0G   1% /mnt/glusterfs/web
+```
+
+Type `exit` to logout from node02
+
+On node03, run
+```
+ssh node03
+cd /root/bin/scripts
+./02-glusterlvm /dev/sdb brick3
+```
+
+Check mount points
+
+```
+# df -h | grep glusterfs
+```
+Output:
+```/dev/mapper/ServiceMesh-cockroachdb  4.0G   33M  4.0G   1% /mnt/glusterfs/cockroachdb
+/dev/mapper/ServiceMesh-web          4.0G   33M  4.0G   1% /mnt/glusterfs/web
+```
+
+Type `exit` to logout from node03
+
+#### Create Gluster Volume
+
+The script [/root/bin/scripts/03-glustervol](/Gluster/03-glustervol) will create gluster volume.
+
+Run this from 1st VM only.
+```
+cd /root/bin/scripts
+./03-glustervol
+```
+
+#### Start Gluster Volume
+
+The script [/root/bin/scripts/04-glusterstartstop](/Gluster/04-glusterstartstop) will start gluster volumes.
+
+Start Gluster volume - do this only from 1st node
+
+```
+cd /root/bin/scripts
+./04-glusterstartstop start
+```
+
+Check status of Gluster volume status. As a sanity check, all tasks `Online` status should show `Y`
+
+```
+# gluster volume status cockroachdb
+Status of volume: cockroachdb
+Gluster process                             TCP Port  RDMA Port  Online  Pid
+------------------------------------------------------------------------------
+Brick 192.168.142.101:/mnt/glusterfs/cockro
+achdb/brick1                                49152     0          Y       19740
+Brick 192.168.142.102:/mnt/glusterfs/cockro
+achdb/brick2                                49152     0          Y       15453
+Brick 192.168.142.103:/mnt/glusterfs/cockro
+achdb/brick3                                49152     0          Y       15662
+Self-heal Daemon on localhost               N/A       N/A        Y       19993
+Self-heal Daemon on 192.168.142.103         N/A       N/A        Y       15780
+Self-heal Daemon on 192.168.142.102         N/A       N/A        Y       15528
+
+Task Status of Volume cockroachdb
+------------------------------------------------------------------------------
+There are no active volume tasks
+
+# gluster volume status web
+Status of volume: web
+Gluster process                             TCP Port  RDMA Port  Online  Pid
+------------------------------------------------------------------------------
+Brick 192.168.142.101:/mnt/glusterfs/web/br
+ick1                                        49153     0          Y       19969
+Brick 192.168.142.102:/mnt/glusterfs/web/br
+ick2                                        49153     0          Y       15504
+Brick 192.168.142.103:/mnt/glusterfs/web/br
+ick3                                        49153     0          Y       15724
+Self-heal Daemon on localhost               N/A       N/A        Y       19993
+Self-heal Daemon on 192.168.142.102         N/A       N/A        Y       15528
+Self-heal Daemon on 192.168.142.103         N/A       N/A        Y       15780
+
+Task Status of Volume web
+------------------------------------------------------------------------------
+There are no active volume tasks
+```

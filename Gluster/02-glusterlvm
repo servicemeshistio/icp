@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Authors
+#
+# Purpose: Prepare node for Gluster Volumes
+#          Run on gluster node
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+NS=ServiceMesh
+
+if vgdisplay | grep -q "$NS"; then
+   echo volume group "$NS" already created. Exiting ... 1>&2
+   echo vgremove -f "$NS" --> to remove
+   exit 1
+fi
+
+DEVICE="$1"
+BRICK="$2"
+if [[ ( -z "$BRICK" || -z "$DEVICE" ) ]] ; then
+  echo >&2 "Usage: $0 devicename block_device_name"
+  echo "Example: $0 /dev/sdb brick1"
+  exit 1
+fi
+echo DEVICE=$DEVICE BRICK=$BRICK
+
+LVNAMES=(cockroachdb web)
+LVSIZE=(4G 4G)
+
+echo ========================================================
+echo Create Physical volume 
+echo ========================================================
+pvcreate $DEVICE
+sleep 1
+
+echo ========================================================
+echo Create Volume Group for $DEVICE
+vgcreate $NS $DEVICE
+vgdisplay $NS
+
+for ((i = 0; i < ${#LVNAMES[@]}; ++i));
+do
+  echo ========================================================
+  name=${LVNAMES[i]}
+  size=${LVSIZE[i]}
+  echo Creating LV $name for size = $size
+  lvcreate -n $name -L $size $NS -W y --yes
+  sleep 1
+  echo ========================================================
+  echo Create directory for mount point
+  mkdir -p /mnt/glusterfs/$name
+  echo ========================================================
+  echo Create xfs on $name
+  mkfs.xfs /dev/$NS/$name
+  sleep 1
+  echo ========================================================
+  echo Create Mount entries in /etc/fstab
+  if ! grep -q "/dev/$NS/$name" /etc/fstab ; then 
+     echo -e "/dev/$NS/$name\t/mnt/glusterfs/$name\txfs\t defaults\t0 0" >> /etc/fstab
+  fi
+  echo Mount LV
+  echo ========================================================
+  mount /mnt/glusterfs/$name
+  sleep 1
+  echo Create brick directory for $name
+  mkdir /mnt/glusterfs/$name/$BRICK               
+  chmod -R 777 /mnt/glusterfs/$name/$BRICK
+done
+echo ========================================================

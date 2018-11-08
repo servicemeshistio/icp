@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Authors
+#
+# Purpose: Create Gluster Volumes and start them
+#          Run on one node only
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+NS=ServiceMesh
+
+if vgdisplay | grep -q "$NS"; then
+   echo volume group "$NS" found.
+else
+   echo volume group "$NS" not found. Exiting ... 1>&2
+   exit 1
+fi
+
+SWITCH="$1"
+if [ -z "$SWITCH" ]; then
+  echo >&2 "Usage: $0 start or stop"
+  exit 1
+fi
+
+if ! [[ ( "$SWITCH" == "start" || "$SWITCH" == "stop" ) ]] ; then
+   echo >&2 "Invalid value of switch \"$SWITCH\". Valid values are start or stop"
+   exit 1
+fi
+
+LVNAMES=(cockroachdb web)
+
+for ((i = 0; i < ${#LVNAMES[@]}; ++i));
+do
+  echo ========================================================
+  name=${LVNAMES[i]}
+  if [ "$SWITCH" == "start" ] ; then
+     echo Start Gluster volume $name
+     gluster volume start $name force
+     gluster volume info $name
+     gluster volume status $name
+  fi
+  if [ "$SWITCH" == "stop" ] ; then
+     echo Stop Gluster volume $name
+     echo 'y' | gluster volume stop $name force
+     echo 'y' | gluster volume delete $name
+  fi
+done
+echo ========================================================

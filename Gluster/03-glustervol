@@ -1,0 +1,37 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Authors
+#
+# Purpose: Create Gluster Volumes and start them
+#          Run on one node only
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+NS=ServiceMesh
+
+if vgdisplay | grep -q "$NS"; then
+   echo volume group "$NS" found.
+else
+   echo volume group "$NS" not found. Exiting ... 1>&2
+   exit 1
+fi
+
+LVNAMES=(cockroachdb web)
+
+for ((i = 0; i < ${#LVNAMES[@]}; ++i));
+do
+  echo ========================================================
+  name=${LVNAMES[i]}
+  echo Create Gluster volume
+  gluster volume create $name replica 3 \
+      192.168.142.101:/mnt/glusterfs/$name/brick1 \
+      192.168.142.102:/mnt/glusterfs/$name/brick2 \
+      192.168.142.103:/mnt/glusterfs/$name/brick3 force
+  gluster volume set $name performance.write-behind off
+done
+echo ========================================================
