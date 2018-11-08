@@ -49,6 +49,15 @@ The `no-hosts` is a directive to `dnsmasq` to not read local `/etc/hosts` file.
 
 The  `addn-hosts=/etc/dnsmasq.hosts` is our local file that is equivalent to `/etc/hosts` file. Sometime, the `/etc/hosts` files are overwritten by the provisioning mechanism so that is why it is better to separate this file.
 
+Create `/etc/dnsmasq.hosts` - which is nothing but copy of `/etc/hosts`. We are doing this in case `/etc/hosts` file is overwritten by the provisioning software.
+
+```
+# cat /etc/dnsmasq.hosts
+192.168.142.101 node01.servicemesh.local node01
+192.168.142.102 node02.servicemesh.local node02
+192.168.142.103 node03.servicemesh.local node03
+```
+
 After this config file is created, start the dns server based upon your Linux distribution.
 
 For RHEL or CentOS
@@ -73,3 +82,25 @@ search servicemesh.local
 ```
 
 The nameserver `192.168.142.101` is the first VM in our case - which is running the `dnsmasq` name server. The name resolution to local hosts, Kubernetes cluster service names and external names will be resolved by our `dnsmasq` server.
+
+## Test dnsmasq
+
+Run the following commands to test dnsmasq
+
+Test local dnsmasq running on first VM.
+```
+# dig +short google.com @192.168.142.101
+172.217.1.206
+```
+
+Test VMware vmnet8 gateway so that it sends DNS requests to the upstream DNS server
+```
+# dig +short google.com @192.168.142.2
+172.217.1.206
+```
+
+Test public google dns server to test direct
+```
+# dig +short google.com @8.8.8.8
+172.217.3.110
+```
