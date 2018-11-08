@@ -42,9 +42,13 @@ If using Intel Core i7 processor in a laptop, it gives 4 cores and 2 threads per
 
 ### Download VMs
 
-If you like to download the three base VM images to install IBM Cloud Private 3 node community edition cluster, you can download 7z of images from [here](#). If you download VMs, you can skip Prepare VM section as the following steps are already taken care in the VMs.
+If you like to download the three base VM images to install IBM Cloud Private 3 node community edition cluster, you can download 7z of images from [here](#). If you download VMs, you can skip this `Prepare your VMs` section as the following steps are already taken care in the VMs.
 
-Continue with these steps, should you choose to use your own VM install.   
+Continue with these steps, should you choose to build your own VMs.   
+
+#### Set up passwordless access
+
+Configure `passwordless` SSH access between all VMs. You can refer to this [link](https://github.com/vikramkhatri/sshsetup) for setting up SSH if you need automation.
 
 #### Disable Local firewall on each VM
 ```
@@ -82,14 +86,61 @@ vm.max_map_count = 262144
 kernel.dmesg_restrict = 0
 net.bridge.bridge-nf-call-iptables = 1
 ```
-* Make sure that you can run `ping -c4 google.com` from each VM to make sure that Internet access is available.  
-* Configure `passwordless` SSH access between all VMs. You can refer to this [link](https://github.com/vikramkhatri/sshsetup) for setting up SSH if you need automation.
-* Configure [direct LVM](Scripts/directLVM) access for a disk to be used by Docker backend. Use 100 GB disk (vmdk) that you attached to the VM as an argument to the script. Run this on all nodes
-* Install docker engine on all nodes
-* Configure [dnsmasq](/Scripts/dnsmasq.md) in first VM for DNS routing if host names are not defined in the upstream DNS server. Optional - but useful
-* Configure [ntpd](Scripts/ntpd.md) on 1st VM so that all VMs time is in sync. Since, we are going to use 3 replicas for CockroachDB, the time must be within 500ms for it work properly.   
 
-## Build a 3 node IBM Cloud Private Cluster
+### Configure dnsmasq on First VM
+
+If you are building your own VMs, [dnsmasq](/docs/dnsmasq.md) in first VM for DNS routing if host names are not defined in the upstream DNS server. Optional - but useful.
+
+If you are using downloaded VMs, the `dnsmasq` is already configured.
+
+### Configure ntp
+
+If you are building your own VMs, configure [ntpd](docs/ntpd.md) on 1st VM so that all VMs time is in sync. Since, we are going to use 3 replicas for CockroachDB, the time must be within 500ms for it work properly.
+
+If you are using downloaded VMs, it is already configured.
+
+### Install docker engine on all nodes
+
+If you are using your own VM, install Docker engine in each VM. Consult docker documentation. If you are using downloaded VMs, docker version `18.03.1-ce` is already installed in the VMs.
+
+### Internet Access
+
+Make sure that you can run `ping -c4 google.com` from each VM to make sure that Internet access is available.  
+
+If ping does not succeed, it is quite possible that the network address of VMnet8 adapter needs to be fixed. Refer to [this](docs/vmnet.md) link for instructions to fix vmnet8 subnet address in VMware.
+
+### Configure docker backend
+
+Configure [direct LVM](Scripts/directLVM) access for a disk to be used by Docker backend.
+
+If you are building your own VM, attach a 100 GB thin provisioned disk to all VMs and run above script on all VMs. Use `lsblk` to find out name of the disk that you will use as a Docker backend.
+
+The script requires input parameter as the name of the disk to be used as a Docker backend.
+
+If you downloaded the VMs, the disk to be used for Docker backend is of size 100 GB and the script `directLVM` is in `/root/bin/scripts` folder.
+
+```
+lsblk
+```
+
+For example: if the disk is `/dev/sdc`, run the command:
+
+```
+cd /root/bin/scripts
+./directLVM /dev/sdc
+```
+
+SSH to `node02` and `node03` and repeat above commands to configure Docker backend in remaining two VMs.
+
+After configuring it, run the following command to make sure that it is created successfully.
+
+```
+ssh node01 docker info
+ssh node02 docker info
+ssh node03 docker info
+```
+
+## Install Three Node IBM Cloud Private Cluster
 
 On your 1st VM, login as root and login to your docker account to download the installation docker image.
 
