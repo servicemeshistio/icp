@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Book
+#
+# Purpose: Label nodes to turn on or off the daemonsets to conserve resources
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+SWITCH="$1"
+if [ -z "$SWITCH" ]; then
+  echo >&2 "Usage: $0 up or down"
+  exit 1
+fi
+
+if ! [[ ( "$SWITCH" == "up" || "$SWITCH" == "down" ) ]] ; then
+   echo >&2 "Invalid value of switch \"$SWITCH\". Valid values are up or down"
+   exit 1
+fi
+
+echo ========================================================
+echo Put label switch=up on all nodes
+
+
+for host in $(cat /var/ps/hosts.icp)
+do 
+   echo Put label switch=up on $host 
+   kubectl label node $host switch=up --overwrite
+done
+
+
+echo ========================================================
+echo Patch daemonsets with a $SWITCH label 
+if [ "$SWITCH" == "down" ] ; then
+  kubectl -n kube-system patch ds logging-elk-filebeat-ds  --patch '{ "spec": { "template": { "spec": { "nodeSelector": { "switch": "down" } } } } }'
+  kubectl -n kube-system patch ds monitoring-prometheus-nodeexporter  --patch '{ "spec": { "template": { "spec": { "nodeSelector": { "switch": "down" } } } } }'
+  kubectl -n kube-system patch ds nvidia-device-plugin  --patch '{ "spec": { "template": { "spec": { "nodeSelector": { "switch": "down" } } } } }'
+  kubectl -n kube-system patch ds audit-logging-fluentd-ds  --patch '{ "spec": { "template": { "spec": { "nodeSelector": { "switch": "down" } } } } }'
+  kubectl -n kube-system scale deploy logging-elk-client --replicas=0
+  kubectl -n kube-system scale deploy logging-elk-kibana --replicas=0
+  kubectl -n kube-system scale deploy logging-elk-logstash --replicas=0
+  kubectl -n kube-system scale deploy logging-elk-master --replicas=0
+  kubectl -n kube-system scale deploy monitoring-grafana --replicas=0
+  kubectl -n kube-system scale deploy monitoring-prometheus --replicas=0
+  kubectl -n kube-system scale deploy monitoring-prometheus-alertmanager --replicas=0
+  kubectl -n kube-system scale deploy monitoring-prometheus-collectdexporter --replicas=0
+  kubectl -n kube-system scale deploy monitoring-prometheus-elasticsearchexporter --replicas=0
+  kubectl -n kube-system scale deploy monitoring-prometheus-kubestatemetrics --replicas=0
+  kubectl -n kube-system scale deploy secret-watcher --replicas=0
+fi
+
+if [ "$SWITCH" == "up" ] ; then
+  kubectl -n kube-system patch ds logging-elk-filebeat-ds --patch '{ "spec": { "template": { "spec": { "nodeSelector": { "switch": "up" } } } } }'
+  kubectl -n kube-system patch ds monitoring-prometheus-nodeexporter  --patch '{ "spec": { "template": { "spec": { "nodeSelector": { "switch": "up" } } } } }'
+  kubectl -n kube-system patch ds nvidia-device-plugin  --patch '{ "spec": { "template": { "spec": { "nodeSelector": { "switch": "up" } } } } }'
+  kubectl -n kube-system patch ds audit-logging-fluentd-ds  --patch '{ "spec": { "template": { "spec": { "nodeSelector": { "switch": "up" } } } } }'
+  kubectl -n kube-system scale deploy logging-elk-client --replicas=1
+  kubectl -n kube-system scale deploy logging-elk-kibana --replicas=1
+  kubectl -n kube-system scale deploy logging-elk-logstash --replicas=1
+  kubectl -n kube-system scale deploy logging-elk-master --replicas=1
+  kubectl -n kube-system scale deploy monitoring-grafana --replicas=1
+  kubectl -n kube-system scale deploy monitoring-prometheus --replicas=1
+  kubectl -n kube-system scale deploy monitoring-prometheus-alertmanager --replicas=1
+  kubectl -n kube-system scale deploy monitoring-prometheus-collectdexporter --replicas=1
+  kubectl -n kube-system scale deploy monitoring-prometheus-elasticsearchexporter --replicas=1
+  kubectl -n kube-system scale deploy monitoring-prometheus-kubestatemetrics --replicas=1
+  kubectl -n kube-system scale deploy secret-watcher --replicas=1
+fi
+echo ========================================================

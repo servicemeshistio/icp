@@ -1,0 +1,113 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Book
+#
+
+NS=kube-system
+
+function waitToTerminate()
+{
+   POD=$1
+   if [ "$POD" == "" ] ; then
+      return
+   fi
+   try=0
+   until [ $try -gt 100 ] ; do
+     STATE=$(kubectl -n $NS get pod $POD --no-headers | awk '{print $3}')
+     if [ "$STATE" == "Terminating" ] ; then
+       echo Still terminating. Wait for 15 seconds.
+       sleep 15
+     else
+       echo pod $POD is not in terminated state.
+       break
+     fi
+     try=$[$try+1]
+   done
+}
+
+function waitToStart()
+{
+   PODCMD="$@"
+   try=0
+   until [ $try -gt 100 ] ; do
+     STATE=$($PODCMD | awk '{print $3}')
+     if [ "$STATE" != "" ] ; then
+       echo state is $STATE.
+       break
+     else
+       echo pod is still not up
+       sleep 15
+     fi
+     try=$[$try+1]
+   done
+}
+
+function waitToReady()
+{
+   POD=$1
+   try=0
+   until [ $try -gt 100 ] ; do
+     STATE=$(kubectl -n $NS get pod $POD --no-headers | awk '{print $3}')
+     if [ "$STATE" == "Running" ] ; then
+       echo $POD is running.
+       break
+     else
+       echo pod $POD is not in running state. Wait 15 seconds
+       sleep 15
+     fi
+     try=$[$try+1]
+   done
+}
+
+function waitForAllUp()
+{
+  POD=$1
+  ALL=$2
+  try=0
+  until [ $try -gt 100 ] ; do
+    READY=$(kubectl -n $NS get pod $POD --no-headers | awk '{print $2}')
+    if [ "$READY" == "$ALL" ] ; then
+      echo All containers are up in pod $POD
+      break;
+    else
+      echo Try $try all containers are still not up. Wait 15 seconds
+      sleep 15
+    fi
+    try=$[$try+1]
+  done
+}
+
+
+echo ====================================================================
+echo Restart mariadb pod
+PODNAME=mariadb-0
+kubectl -n $NS delete pod $PODNAME
+waitToTerminate $PODNAME
+PODCMD="kubectl -n $NS get pod $PODNAME --no-headers"
+waitToStart $PODCMD
+waitToReady $PODNAME
+waitForAllUp $PODNAME "1/1"
+
+echo ====================================================================
+echo Restart mongodb pod
+PODNAME=icp-mongodb-0
+kubectl -n $NS delete pod $PODNAME
+waitToTerminate $PODNAME
+PODCMD="kubectl -n $NS get pod $PODNAME --no-headers"
+waitToStart $PODCMD
+waitToReady $PODNAME
+waitForAllUp $PODNAME "1/1"
+
+echo ====================================================================
+echo Restart auth idp pod
+PODNAME=$(kubectl -n $NS get pod -l component=auth-idp --no-headers | awk '{print $1}')
+kubectl -n $NS delete pod $PODNAME
+waitToTerminate $PODNAME
+PODCMD="kubectl -n $NS get pod -l component=auth-idp --no-headers"
+waitToStart $PODCMD
+PODNAME=$(kubectl -n $NS get pod -l component=auth-idp --no-headers | awk '{print $1}')
+waitToReady $PODNAME
+waitForAllUp $PODNAME "3/3"
+echo ====================================================================

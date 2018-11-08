@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Book
+#
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+if [ -f /var/ps/hosts ] ; then
+  MASTERNODE=$(awk '/master/{getline; print $1}' /var/ps/hosts)
+fi
+
+if [ -f /var/ps/config.yaml ] ; then
+  CLUSTERNAME=$(awk '/cluster_name/ {print $2}' /var/ps/config.yaml)
+  DEFAULTUSERNAME=$(awk '/default_admin_user/ {print $2}' /var/ps/config.yaml)
+  DEFAULTPASSWORD=$(awk '/default_admin_password/ {print $2}' /var/ps/config.yaml)
+fi
+
+SCP="/bin/scp -q -o StrictHostKeyChecking=no"
+
+echo ==========================================================
+echo Use the curl commannds to download cloudctl and helm from IBM Cloud Private 
+curl -kLo /tmp/helm-linux-amd64-v2.9.1.tar.gz https://$MASTERNODE:8443/api/cli/helm-linux-amd64.tar.gz
+curl -kLo /tmp/cloudctl-linux-amd64-3.1.0-715 https://$MASTERNODE:8443/api/cli/cloudctl-linux-amd64
+mv /tmp/cloudctl-linux-amd64-3.1.0-715 /bin/cloudctl
+chmod +x /bin/cloudctl
+tar xvfz /tmp/helm-linux-amd64-v2.9.1.tar.gz -C /tmp linux-amd64/helm
+mv /tmp/linux-amd64/helm /bin
+chmod +x /bin/helm
+echo ==========================================================
+echo Copy cloudctl and helm to all
+
+for server in $(cat /var/ps/hosts.icp)
+do
+   echo ==========================================================
+   echo "Copying cloudctl to $server"
+   $SCP /bin/cloudctl $server:/bin
+   echo "Copying helm to     $server"
+   $SCP /bin/helm $server:/bin
+done
+
+echo ==========================================================
+echo Help - Command to login to ICP cluster
+echo ==========================================================
+
+echo cloudctl login example
+cloudctl login -n kube-system -u $DEFAULTUSERNAME -p $DEFAULTPASSWORD -a https://$MASTERNODE:8443 --skip-ssl-validation -c "id-$CLUSTERNAME-account"

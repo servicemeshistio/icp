@@ -1,0 +1,80 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Book
+#
+# Purpose: Extract sample configuration from docker image
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+echo ========================================================
+echo Extract sample configuration from docker image
+echo Just to show you the bootstrap files required before install
+echo ========================================================
+
+mkdir -p /opt/ibm/icp3.1.0
+cd /opt/ibm/icp3.1.0
+
+docker run --rm -v $(pwd):/data -e LICENSE=accept \
+   ibmcom/icp-inception:3.1.0 \
+   cp -r cluster /data
+
+echo ========================================================
+echo Copy private ssh key from /root/.ssh
+echo ========================================================
+/bin/cp -f ~/.ssh/id_rsa ./cluster/ssh_key
+
+
+echo ========================================================
+echo Create hosts and config.yaml 
+echo ========================================================
+cat << 'EOT' > ./cluster/hosts
+[master]
+192.168.142.101
+
+[worker]
+192.168.142.101
+192.168.142.102
+192.168.142.103
+
+[proxy]
+192.168.142.101
+EOT
+
+cat << 'EOT' > ./cluster/config.yaml
+wait_for_timeout: 600
+skip_pre_check: true
+firewall_enabled: false
+auditlog_enabled: false
+federation_enabled: false
+secure_connection_enabled: false
+network_type: calico
+network_cidr: 10.1.0.0/16
+service_cluster_ip_range: 10.0.0.1/24
+kubelet_extra_args: ["--fail-swap-on=false"]
+cluster_name: servicemesh
+default_admin_user: admin
+default_admin_password: admin
+install_docker: false
+private_registry_enabled: false
+image_repo: ibmcom
+offline_pkg_copy_path: /temp
+management_services:
+  istio: disabled
+  vulnerability-advisor: disabled
+  storage-glusterfs: disabled
+  storage-minio: disabled
+  image-security-enforcement: disabled
+  metering: disabled
+  monitoring: disabled
+  service-catalog: disabled
+  custom-metrics-adapter: disabled
+EOT
+
+mkdir -p /var/ps
+/bin/cp -f ./cluster/config.yaml /var/ps
+/bin/cp -f ./cluster/hosts /var/ps

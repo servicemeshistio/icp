@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio
+#
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+echo ========================================================
+echo Delete completed job pods
+echo ========================================================
+
+kubectl -n kube-system delete pods $(echo $(kubectl -n kube-system get pods --no-headers | grep Completed | awk '{print $1}'))

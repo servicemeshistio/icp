@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Book
+#
+# Purpose: Set content to servicemesh
+
+kubectl config use-context servicemesh

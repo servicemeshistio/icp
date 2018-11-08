@@ -1,0 +1,1 @@
+kubectl get nodes -o go-template-file="./icp98.tpl"

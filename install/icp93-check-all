@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio
+#
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+command -v kubectl >/dev/null 2>&1 || { echo >&2 "kubectl not found.  Aborting."; exit 1; }
+
+index=0
+retries=20
+while true; do
+  echo Trying $index
+  index=$(( index + 1 ))
+  [[ $index -eq $retries ]] && break
+  kubectl get pods --all-namespaces --field-selector=status.phase!=Succeeded | grep -vE "1/1|2/2|3/3|4/4"
+  sleep 30
+done

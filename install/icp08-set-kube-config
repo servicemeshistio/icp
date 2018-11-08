@@ -1,0 +1,54 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Book
+#
+
+echo ==========================================================
+echo Set key and crt based non-expiring access
+echo ==========================================================
+
+SCP="/bin/scp -q -o StrictHostKeyChecking=no"
+ICP_HOMEDIR=/opt/ibm/icp3.1.0
+MASTERNODE=$(awk '/master/{getline; print $1}' /var/ps/hosts)
+DEFAULTUSERNAME=$(awk '/default_admin_user/ {print $2}' /var/ps/config.yaml)
+
+
+MYKUBE=$HOME/.mykube
+export KUBECONFIG=$MYKUBE/config
+mkdir -p $MYKUBE/conf
+sudo cp $ICP_HOMEDIR/cluster/cfc-certs/kubecfg.key $MYKUBE/conf
+sudo cp $ICP_HOMEDIR/cluster/cfc-certs/kubecfg.crt $MYKUBE/conf
+sudo chown -R $(echo $(id -u)).$(echo $(id -g)) $MYKUBE/conf
+cat << EOF > $MYKUBE/config
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://$MASTERNODE:8001
+  name: servicemesh
+contexts:
+- context:
+    cluster: servicemesh
+    namespace: default
+    user: $DEFAULTUSERNAME
+  name: servicemesh
+current-context: servicemesh
+users:
+- name: $DEFAULTUSERNAME
+  user:
+    client-certificate: $MYKUBE/conf/kubecfg.crt
+    client-key: $MYKUBE/conf/kubecfg.key
+EOF
+
+
+echo ==========================================================
+echo Copy $MYKUBE to all hosts
+echo ==========================================================
+for host in $(cat /var/ps/hosts.icp)
+do
+   echo Copying $MYKUBE to $host
+   $SCP -r $MYKUBE $host:$HOME
+done

@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Book 
+#
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+SCP="/bin/scp -q -o StrictHostKeyChecking=no"
+ICP_HOMEDIR=/opt/ibm/icp3.1.0
+
+mkdir -p /var/ps
+cat << 'EOT' > /var/ps/hosts.icp
+192.168.142.101
+192.168.142.102
+192.168.142.103
+EOT
+
+echo ========================================================
+echo Get kubectl from the container
+echo ========================================================
+cd $ICP_HOMEDIR
+docker run --rm -v $(pwd):/data -e LICENSE=accept \
+   ibmcom/icp-inception:3.1.0 \
+   cp -r /usr/local/bin/kubectl /data
+
+echo ========================================================
+echo Copy kubectl to /bin on all hosts
+chmod +x kubectl
+cp kubectl /bin
+for host in $(cat /var/ps/hosts.icp)
+do 
+   echo Copying kubectl to $host
+   $SCP kubectl $host:/bin
+done
+echo ========================================================
