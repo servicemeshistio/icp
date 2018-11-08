@@ -27,7 +27,7 @@ Build VMs and when you have all 3 VMs up and running, prepare your environment.
 The CPU and memory recommendations for VMs to build a 3 node cluster is:
 
 |VM |Type|IP Address|CPU|Memory|
-|---------------------|-----------|-----------|---------------------|
+|---------------------|-----------|-----------|-----------|----------|
 |node01|Master,Proxy,Worker,Management|192.168.142.101|8|12 GB|
 |node02|Worker|192.168.142.102|4|8 GB|
 |node03|Worker|192.168.142.103|4|8 GB|
@@ -377,5 +377,3 @@ kubectl config use-context servicemesh
 Now, we can run `kubectl` command which will not expire as we are using certificate based authentication, which was the case `cloudctl login` but that comes with a bearer token.
 
 This method is good if we work directly from the server.
-
- 
