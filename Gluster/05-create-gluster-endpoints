@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Authors
+#
+# Purpose: Create Gluster endpoints for Kubernetes
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+echo =================================================================================
+echo Create gluster end point for storage
+
+NS=ms
+kubectl get ns $NS > /dev/null 2>&1
+
+if [ $? -eq 1 ] ; then
+  echo =========================================================
+  echo Create name space : $NS
+cat << EOF | kubectl apply -f -
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $NS
+EOF
+fi
+
+cat << EOF | kubectl -n $NS apply -f -
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: glusterfs-endpoint
+subsets:
+- addresses:
+  - ip: 192.168.142.101
+  - ip: 192.168.142.102
+  - ip: 192.168.142.103
+  ports:
+  - port: 1
+    protocol: TCP
+---
+EOF
+
+echo =======================================================================
+echo  Create gluster service for the end point
+cat << EOF | kubectl -n $NS apply -f -
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    component: glusterfs
+    name: glusterfs-endpoint
+  name: glusterfs-endpoint
+spec:
+  ports:
+  - port: 1
+    protocol: TCP
+    targetPort: 1
+  type: ClusterIP
+---
+EOF

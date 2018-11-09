@@ -1,0 +1,82 @@
+cat << EOT | kubectl -n ms apply -f -
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cockroachdb-storage
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-cdb-pv-1
+  labels:
+    component: cockroachdb
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 2Gi
+  local:
+    path: /mnt/cockroachdb
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - 192.168.142.101
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: cockroachdb-storage
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-cdb-pv-2
+  labels:
+    component: cockroachdb
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 2Gi
+  local:
+    path: /mnt/cockroachdb
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - 192.168.142.102
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: cockroachdb-storage
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-cdb-pv-3
+  labels:
+    component: cockroachdb
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 2Gi
+  local:
+    path: /mnt/cockroachdb
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - 192.168.142.103
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: cockroachdb-storage
+---
+EOT

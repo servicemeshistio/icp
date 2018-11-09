@@ -144,6 +144,28 @@ ssh node01 docker info
 ssh node02 docker info
 ssh node03 docker info
 ```
+## Synchronize Clocks
+
+Before we install cockroachdb helm chart, we need to make sure that the clocks are in sync.
+
+This is necessary to keep clocks in sync within 500 ms so that cockroachdb can function well in a cluster environment.
+
+Run script [/root/bin/scripts/syncclocks](/Scripts/syncclocks) which does the following:
+
+* Create `/bin/synclock` - which checks the time difference between VMs.
+* Create a cronjob to run this sript every 15 minutes - though not necessary as NTP should do its job. Sync time in VMs is challenging due to time sync at Windows level, from VM to the guest and then using NTP between all nodes using ntpd.
+* Create `/bin/hardsync` which will do a force time sync between VMs.
+
+After running `syncclocks`, run `synclock`
+
+```
+# synclock
+=================================================================================
+Checking time diff between 192.168.142.101 with the node01 .... 0.000 milliseconds
+Checking time diff between 192.168.142.102 with the node01 .... -2.141 milliseconds
+Checking time diff between 192.168.142.103 with the node01 .... -1.983 milliseconds
+=================================================================================
+```
 
 ## Install Three Node IBM Cloud Private Cluster
 
@@ -656,25 +678,171 @@ Task Status of Volume web
 There are no active volume tasks
 ```
 
-## Synchronize Clocks
+## Create GlusterFS endpoints
 
-Before we install cockroachdb, we need to make sure that the clocks are in sync.
-
-This is necessary to keep clocks in sync within 500 ms so that cockroachdb can function well in a cluster environment.
-
-Run script [/root/bin/scripts/syncclocks](/Scripts/syncclocks) which does the following:
-
-* Create `/bin/synclock` - which checks the time difference between VMs.
-* Create a cronjob to run this sript every 15 minutes - though not necessary as NTP should do its job. Sync time in VMs is challenging due to time sync at Windows level, from VM to the guest and then using NTP between all nodes using ntpd.
-* Create `/bin/hardsync` which will do a force time sync between VMs.
-
-After running `syncclocks`, run `synclock`
+Script [/root/bin/scripts/05-create-gluster-endpoints](/Scripts/05-create-gluster-endpoints) will create
+* Namespace `ms` which we will use for our Microservices application
+* Create Kubernetes endpoint `endpoints/glusterfs-endpoint` which will point to 3 node Gluster cluster. Incidentally, our IBM Cloud Private cluster and GlusterFS cluster are on same hosts. This will not be case in actual production environments.
+* Create Kubernetes service `glusterfs-endpoint` for network connection
 
 ```
-# synclock
-=================================================================================
-Checking time diff between 192.168.142.101 with the node01 .... 0.000 milliseconds
-Checking time diff between 192.168.142.102 with the node01 .... -2.141 milliseconds
-Checking time diff between 192.168.142.103 with the node01 .... -1.983 milliseconds
-=================================================================================
+cd /root/bin/scripts
+./05-create-gluster-endpoints
 ```
+
+Check the endpoint and service created in `ms` namespace
+
+```
+# kubectl -n ms get endpoints
+NAME                 ENDPOINTS                                               AGE
+glusterfs-endpoint   192.168.142.101:1,192.168.142.102:1,192.168.142.103:1   4m
+
+# kubectl -n ms get services
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+glusterfs-endpoint   ClusterIP   10.0.0.65    <none>        1/TCP     4m
+
+```
+
+## Create Physical Volume and Physical Volume Claim using Gluster
+
+Script [/root/bin/scripts/06-create-pv-pvc](/Scripts/06-create-pv-pvc) will create 4 PVs. Three PVs for ChockroachDB and one PV for web persistence.
+
+The above is an example of using Gluster backed PVs. Since we are using Gluster with 3 replica sets, the copies of the same data is available on 3 nodes and in case of node failure, the data is still available on other 2 nodes. This provides high availability.
+
+```
+cd /root/bin/scripts
+./06-create-pv-pvc
+```
+
+## Create Physical Volume and Physical Volume Claim using Local Storage
+With Kubernetes 1.10, the local storage group concept is available now. Let's see this as an example for creating Physical Volume using local storage file system. Under the cover the local file system can be backed by a storage solution that provides the resiliency and high availability.
+
+Script [/root/bin/icp/icp11-cockroachdb-sc-pv-pvc](/install/icp11-cockroachdb-sc-pv-pvc) is an example of creating a storage class `cockroachdb-storage` using no provisioner. Create a PV `local-cdb-pv-1` using path `/mnt/cockroachdb` on `192.168.142.101` using `nodeAffinity` and similarly `local-cdb-pv-2` and `local-cdb-pv-3` on `192.168.142.102` and `192.168.142.103` using directory name `/mnt/cockroachdb`.
+
+```
+cd /root/bin/icp
+./icp11-cockroachdb-sc-pv-pvc
+```
+
+### Authenticate using `cloudctl login`
+
+The script [/root/bin/icp/icp09-cloudctl-login](/install//root/bin/icp/icp09-cloudctl-login) can be used to login using `cloudctl`
+
+```
+cd /root/bin/icp
+./icp09-cloudctl-login
+```
+
+The output:
+```
+# icp09-cloudctl-login
+==========================================================
+cloudctl login to authenticate - Required for helm commands
+==========================================================
+Authenticating...
+OK
+
+Targeted account servicemesh Account (id-servicemesh-account)
+
+Targeted namespace kube-system
+
+Configuring kubectl ...
+Property "clusters.servicemesh" unset.
+Property "users.servicemesh-user" unset.
+Property "contexts.servicemesh-context" unset.
+Cluster "servicemesh" set.
+User "servicemesh-user" set.
+Context "servicemesh-context" created.
+Switched to context "servicemesh-context".
+OK
+
+Configuring helm: /root/.helm
+OK
+
+```
+
+### Helm Version
+
+```
+# helm version --short --tls
+```
+Output:
+```
+Client: v2.9.1+g20adb27
+Server: v2.9.1+icp+g843201e
+```
+
+### Helm init client
+
+```
+helm init --client-only --skip-refresh
+```
+
+Output:
+```
+Creating /root/.helm/repository
+Creating /root/.helm/repository/cache
+Creating /root/.helm/repository/local
+Creating /root/.helm/plugins
+Creating /root/.helm/starters
+Creating /root/.helm/cache/archive
+Creating /root/.helm/repository/repositories.yaml
+Adding stable repo with URL: https://kubernetes-charts.storage.googleapis.com
+Adding local repo with URL: http://127.0.0.1:8879/charts
+$HELM_HOME has been configured at /root/.helm.
+Not installing Tiller due to 'client-only' flag having been set
+Happy Helming!
+```
+
+### Helm Repo
+
+```
+helm repo list
+```
+
+Output:
+
+```
+NAME  	URL                                             
+stable	https://kubernetes-charts.storage.googleapis.com
+local 	http://127.0.0.1:8879/charts                    
+```
+
+### Update repo
+
+```
+helm repo update
+```
+Output:
+```
+Hang tight while we grab the latest from your chart repositories...
+...Skip local chart repository
+...Successfully got an update from the "stable" chart repository
+Update Complete. ⎈ Happy Helming!⎈
+```
+
+The stable repo is the one that we will use to install `cockroachdb` using Helm.
+
+### Search stable repo for charts
+
+```
+helm search stable | grep cockroachdb
+```
+Output:
+```
+# helm search stable | grep cockroachdb
+stable/cockroachdb                   	2.0.3        	2.0.6                       	CockroachDB is a scalable, survivable, strongly
+```
+
+### Install CockroachDB Helm Chart
+
+There are multiple ways to deploy a helm chart.
+
+* Using a public repo that hosts the chart. Example: Kubernetes Charts at [https://github.com/helm/charts](https://github.com/helm/charts)
+* Create your local charts repository behind your firewall that will hosts all charts that you bring from outside, customize or your own charts.
+* Copy the chart tar file locally and then install it using the tar file.
+* Copy the chart directory locally and then install it using local chart directory
+
+In our case, we will use the cockroachdb chart available publicly and modify the run time parametrs using --set operator.
+
+Script [/root/bin/icp/icp12-cockroachdb-helm-install]()  

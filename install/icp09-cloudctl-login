@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# IBM Cloud Private
+#
+# Author : Service Mesh Istio Book
+#
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+if [ -f /var/ps/hosts ] ; then
+  MASTERNODE=$(awk '/master/{getline; print $1}' /var/ps/hosts)
+fi
+
+if [ -f /var/ps/config.yaml ] ; then
+  CLUSTERNAME=$(awk '/cluster_name/ {print $2}' /var/ps/config.yaml)
+  DEFAULTUSERNAME=$(awk '/default_admin_user/ {print $2}' /var/ps/config.yaml)
+  DEFAULTPASSWORD=$(awk '/default_admin_password/ {print $2}' /var/ps/config.yaml)
+fi
+
+SCP="/bin/scp -q -o StrictHostKeyChecking=no"
+
+echo ==========================================================
+echo cloudctl login to authenticate - Required for helm commands
+echo ==========================================================
+
+cloudctl login -n kube-system -u $DEFAULTUSERNAME -p $DEFAULTPASSWORD -a https://$MASTERNODE:8443 --skip-ssl-validation -c "id-$CLUSTERNAME-account"

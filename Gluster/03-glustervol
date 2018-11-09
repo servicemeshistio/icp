@@ -21,7 +21,7 @@ else
    exit 1
 fi
 
-LVNAMES=(cockroachdb web)
+LVNAMES=(LV2G-1 LV2g-2 LV2G-3 LV4G-1)
 
 for ((i = 0; i < ${#LVNAMES[@]}; ++i));
 do

@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# IBM Cloud Private 
+#
+# Author : Service Mesh Istio Book
+#
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+NS=ms
+
+echo ==============================================================
+echo Install CockroachDB Helm Chart
+helm upgrade --tls --install --force --timeout=600 --namespace=$NS -f ./cockroachdb-values.yaml smcdb stable/cockroachdb --set Image="cockroachdb/cockroach" --set ImageTag="v2.1.0" --set ImagePullPolicy="IfNotPresent" --set Replicas="3" --set Storage="2Gi" --set StorageClass="cockroachdb-storage"
